@@ -43,31 +43,45 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
    * The contents of this actor is just a suggestion, you can implement it in any way you like.
    */
   private val logger = LoggerFactory.getLogger(this.getClass)
+
   var kv = Map.empty[String, String]
   // a map from secondary replicas to replicators
   var secondaries = Map.empty[ActorRef, ActorRef]
   // the current set of replicators
   var replicators = Set.empty[ActorRef]
 
+  private var repExpectedSeqNo: Long = 0L
+
   def receive = {
-    case JoinedPrimary   => context.become(leader)
+    case JoinedPrimary => context.become(leader)
     case JoinedSecondary => context.become(replica)
   }
+
+  def lookup(key: String): Option[String] = if (kv.isDefinedAt(key)) Some(kv(key)) else None
 
   /* TODO Behavior for  the leader role. */
   val leader: Receive = {
     case Insert(key, value, id) => { kv = kv + ((key, value)); sender ! OperationAck(id); }
     case Remove(key, id) => { kv = kv - key; sender ! OperationAck(id); }
-    case Get(key, id) => {
-      val result = if(kv.isDefinedAt(key)) Some(kv(key)) else None
-      logger.debug(s"get $key, current map is $kv, result is $result") 
-      sender ! GetResult(key, result, id) 
-    }
+    case Get(key, id) => sender ! GetResult(key, lookup(key), id)
   }
 
   /* TODO Behavior for the replica role. */
   val replica: Receive = {
-    case _ =>
+    case Get(key, id) => sender ! GetResult(key, lookup(key), id)
+    case Snapshot(key, valueOption, seq) => {
+      if (seq < repExpectedSeqNo) {
+        sender ! SnapshotAck(key, seq)
+      } else if (seq > repExpectedSeqNo) {
+        //ignore
+      } else {
+        valueOption match {
+          case Some(value) => { kv = kv + ((key, value)); sender ! SnapshotAck(key, seq); }
+          case None => { kv = kv - key; sender ! SnapshotAck(key, seq); }
+        }
+        repExpectedSeqNo = repExpectedSeqNo + 1
+      }
+    }
   }
 
 }
