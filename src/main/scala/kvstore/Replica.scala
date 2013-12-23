@@ -12,6 +12,7 @@ import akka.actor.PoisonPill
 import akka.actor.OneForOneStrategy
 import akka.actor.SupervisorStrategy
 import akka.util.Timeout
+import org.slf4j._
 
 object Replica {
   sealed trait Operation {
@@ -36,10 +37,12 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
   import Persistence._
   import context.dispatcher
 
+  arbiter ! Join
+
   /*
    * The contents of this actor is just a suggestion, you can implement it in any way you like.
    */
-  
+  private val logger = LoggerFactory.getLogger(this.getClass)
   var kv = Map.empty[String, String]
   // a map from secondary replicas to replicators
   var secondaries = Map.empty[ActorRef, ActorRef]
@@ -53,7 +56,13 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
 
   /* TODO Behavior for  the leader role. */
   val leader: Receive = {
-    case _ =>
+    case Insert(key, value, id) => { kv = kv + ((key, value)); sender ! OperationAck(id); }
+    case Remove(key, id) => { kv = kv - key; sender ! OperationAck(id); }
+    case Get(key, id) => {
+      val result = if(kv.isDefinedAt(key)) Some(kv(key)) else None
+      logger.debug(s"get $key, current map is $kv, result is $result") 
+      sender ! GetResult(key, result, id) 
+    }
   }
 
   /* TODO Behavior for the replica role. */

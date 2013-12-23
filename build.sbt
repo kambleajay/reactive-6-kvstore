@@ -10,6 +10,10 @@ libraryDependencies += "org.scalatest" %% "scalatest" % "1.9.1" % "test"
 
 libraryDependencies += "junit" % "junit" % "4.10" % "test"
 
+//libraryDependencies += "com.typesafe" %% "scalalogging-slf4j" % "1.0.1"
+
+libraryDependencies += "log4j" % "log4j" % "1.2.17"
+
 // This setting defines the project to which a solution is submitted. When creating a
 // handout, the 'createHandout' task will make sure that its value is correct.
 submitProjectName := "kvstore"
