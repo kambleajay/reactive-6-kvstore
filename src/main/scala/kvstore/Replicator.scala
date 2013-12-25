@@ -4,6 +4,7 @@ import akka.actor.Props
 import akka.actor.Actor
 import akka.actor.ActorRef
 import scala.concurrent.duration._
+import scala.language.postfixOps
 
 object Replicator {
   case class Replicate(key: String, valueOption: Option[String], id: Long)
@@ -11,6 +12,8 @@ object Replicator {
   
   case class Snapshot(key: String, valueOption: Option[String], seq: Long)
   case class SnapshotAck(key: String, seq: Long)
+
+  case class Retransmit(key: String, valueOption: Option[String], seq: Long)
 
   def props(replica: ActorRef): Props = Props(new Replicator(replica))
 }
@@ -24,10 +27,13 @@ class Replicator(val replica: ActorRef) extends Actor {
    * The contents of this actor is just a suggestion, you can implement it in any way you like.
    */
 
+  //val cancellable = context.system.scheduler.schedule(100 milliseconds, 100 milliseconds, self, Retransmit)
+     
   // map from sequence number to pair of sender and request
   var acks = Map.empty[Long, (ActorRef, Replicate)]
   // a sequence of not-yet-sent snapshots (you can disregard this if not implementing batching)
   var pending = Vector.empty[Snapshot]
+  var done = Vector.empty[Snapshot]
   
   var _seqCounter = 0L
   def nextSeq = {
@@ -38,7 +44,34 @@ class Replicator(val replica: ActorRef) extends Actor {
   
   /* TODO Behavior for the Replicator. */
   def receive: Receive = {
-    case _ =>
+
+    case msg@Replicate(key, optOfValue, id) => {
+      val seqNo = nextSeq
+      val snapshotMsg = Snapshot(key, optOfValue, seqNo)
+      pending = pending :+ snapshotMsg
+      acks = acks + ((seqNo, (sender, msg)))
+
+      replica ! snapshotMsg
+      context.system.scheduler.schedule(100 milliseconds, 100 milliseconds, self, Retransmit(key, optOfValue, seqNo))
+    }
+
+    case SnapshotAck(inkey, inseq) => {
+      val pendingSize = pending.size
+      pending = pending.filterNot(snapshot => snapshot.key == inkey && snapshot.seq == inseq)
+      assert((pending.size + 1) == pendingSize)
+      val (sender, req) = acks(inseq)
+      done = done :+ Snapshot(inkey, req.valueOption, inseq)
+      sender ! Replicated(inkey, req.id)
+    }
+
+    case Retransmit(key, optOfValue, seq) => {
+      val snapshotMsg = Snapshot(key, optOfValue, seq)
+      if(!done.contains(snapshotMsg)) {
+        replica ! snapshotMsg
+        context.system.scheduler.schedule(100 milliseconds, 100 milliseconds, self, Retransmit(key, optOfValue, seq))
+      }
+    }
+
   }
 
 }

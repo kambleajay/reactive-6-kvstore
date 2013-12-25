@@ -10,6 +10,8 @@ libraryDependencies += "org.scalatest" %% "scalatest" % "1.9.1" % "test"
 
 libraryDependencies += "junit" % "junit" % "4.10" % "test"
 
+libraryDependencies += "org.specs2" %% "specs2" % "2.3.6" % "test"
+
 //libraryDependencies += "com.typesafe" %% "scalalogging-slf4j" % "1.0.1"
 
 //libraryDependencies += "log4j" % "log4j" % "1.2.17"
