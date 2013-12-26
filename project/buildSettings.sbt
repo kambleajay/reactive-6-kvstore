@@ -23,6 +23,8 @@ addSbtPlugin("com.typesafe.sbteclipse" % "sbteclipse-plugin" % "2.1.0")
 
 addSbtPlugin("com.github.mpeltonen" % "sbt-idea" % "1.5.2")
 
+//addSbtPlugin("de.johoop" % "cpd4sbt" % "1.1.4")
+
 // for dependency-graph plugin
 // net.virtualvoid.sbt.graph.Plugin.graphSettings
 
