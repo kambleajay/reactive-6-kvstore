@@ -51,9 +51,12 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
 
   arbiter ! Join
 
-  override val supervisorStrategy: OneForOneStrategy = OneForOneStrategy(maxNrOfRetries = 5) {
-    case ex: PersistenceException => SupervisorStrategy.Resume
-  }
+  // override val supervisorStrategy: OneForOneStrategy = OneForOneStrategy(maxNrOfRetries = 15) {
+  //   case ex: PersistenceException => {
+  //     println("!persistence exception")
+  //     SupervisorStrategy.Resume
+  //   }
+  // }
 
   private val persistance = context.actorOf(persistenceProps)
   /*
@@ -87,7 +90,7 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
   val leader: Receive = {
 
     case msg @ Insert(key, value, id) => {
-      //println(s"[P] Insert=$msg")
+      println(s"[P] Insert=$msg")
       kv = kv + ((key, value))
       requesters = requesters + (((key, id), sender))
       persistance ! Persist(key, Some(value), id)
@@ -99,7 +102,7 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     }
 
     case msg @ Remove(key, id) => {
-      //println(s"[P] Remove=$msg")
+      println(s"[P] Remove=$msg")
       kv = kv - key
       requesters = requesters + (((key, id), sender))
       persistance ! Persist(key, None, id)
@@ -110,7 +113,7 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     }
 
     case msg @ Persisted(key, id) => {
-      //println(s">>[P] Persisted=$msg")
+      println(s">>[P] Persisted=$msg")
       val originalRequester = requesters((key, id))
       donePersistence = donePersistence + msg
       val replAcks = expectedAcks.get(((key, id)))
@@ -120,14 +123,14 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     }
 
     case msg @ Replicated(key, id) => {
-      //println(s">>[P] Replicated=$msg")
+      println(s">>[P] Replicated=$msg")
       val acks = expectedAcks.get((key, id))
       if (acks.isDefined) {
         expectedAcks = expectedAcks + ((key, id) -> (acks.get - sender))
       }
       val isPersisted = donePersistence.contains(Persisted(key, id))
       val updatedAcks = expectedAcks.get((key, id))
-      ////println(s"STATS - acks size=${expectedAcks(((key, id))).size}, persisted=$isPersisted, rep size=${replicators.size}}")
+      //println(s"STATS - acks size=${expectedAcks(((key, id))).size}, persisted=$isPersisted, rep size=${replicators.size}}")
       if ((!updatedAcks.isDefined || updatedAcks.get.isEmpty) && isPersisted) {
         val originalRequester = requesters((key, id))
         originalRequester ! OperationAck(id)
@@ -135,7 +138,7 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     }
 
     case msg @ RetryPersist(key, optOfValue, id) => {
-      //println(s"[P] RetryPersist=$msg")
+      println(s"[P] RetryPersist=$msg")
       val persistMsg = Persist(key, optOfValue, id)
       if (!donePersistence.contains(Persisted(key, id)) ||
         failedPersistence.contains(Persisted(key, id))) {
@@ -145,7 +148,7 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     }
 
     case msg @ PersistCheck(key, id) => {
-      //println(s"[P] PersistCheck=$msg")
+      println(s"[P] PersistCheck=$msg")
       if (!donePersistence.contains(Persisted(key, id))) {
         failedPersistence = failedPersistence + Persisted(key, id)
         val originalRequester = requesters((key, id))
@@ -154,7 +157,7 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     }
 
     case msg @ Replicas(replicas) => {
-      //println(s"[P] Replicas=$msg")
+      println(s"[P] Replicas=$msg")
       val secondaryReplicas = replicas - self
       secondaryReplicas.foreach { aReplica =>
         val lookup = secondaries.get(aReplica)
@@ -191,7 +194,7 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     }
 
     case msg @ GlobalAckCheck(key, id) => {
-      //println(s"[P] GlobalAckCheck=$msg")
+      println(s"[P] GlobalAckCheck=$msg")
       if (!replicators.isEmpty) {
         val acks = expectedAcks.get(((key, id)))
         acks match {
@@ -211,12 +214,12 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
   val replica: Receive = {
 
     case msg @ Get(key, id) => {
-      //println(s"\t\t[S] Get=$msg")
+      println(s"\t\t[S] Get=$msg")
       sender ! GetResult(key, lookup(key), id)
     }
 
     case msg @ Snapshot(key, valueOption, seq) => {
-      //println(s"\t\t[S] Snapshot=$msg")
+      println(s"\t\t[S] Snapshot=$msg")
       if (seq < repExpectedSeqNo) {
         sender ! SnapshotAck(key, seq)
       } else if (seq > repExpectedSeqNo) {
@@ -238,14 +241,14 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     }
 
     case msg @ Persisted(key, id) => {
-      //println(s"\t\t[S] Persisted=$msg")
+      println(s"\t\t[S] Persisted=$msg")
       val originalRequester = requesters((key, id))
       donePersistence = donePersistence + msg
       originalRequester ! SnapshotAck(key, id)
     }
 
     case msg @ RetryPersist(key, optOfValue, id) => {
-      //println(s"\t\t[S] RetryPersist=$msg")
+      println(s"\t\t[S] RetryPersist=$msg")
       val persistMsg = Persist(key, optOfValue, id)
       if (!donePersistence.contains(Persisted(key, id))) {
         persistance ! persistMsg
