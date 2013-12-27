@@ -49,7 +49,7 @@ class Replicator(val replica: ActorRef) extends Actor {
   def receive: Receive = {
 
     case msg@Replicate(key, optOfValue, id) => {
-      println(s"\t[RT] Replicate=$msg")
+      //println(s"\t[RT] Replicate=$msg")
       val seqNo = nextSeq
       val snapshotMsg = Snapshot(key, optOfValue, seqNo)
       pending = pending :+ snapshotMsg
@@ -60,7 +60,7 @@ class Replicator(val replica: ActorRef) extends Actor {
     }
 
     case msg@SnapshotAck(inkey, inseq) => {
-      println(s"\t[RT] SnapshotAck=$msg")
+      //println(s"\t[RT] SnapshotAck=$msg")
       val pendingSize = pending.size
       pending = pending.filterNot(snapshot => snapshot.key == inkey && snapshot.seq == inseq)
       assert((pending.size + 1) == pendingSize)
@@ -70,7 +70,7 @@ class Replicator(val replica: ActorRef) extends Actor {
     }
 
     case msg@RetrySnapshot(key, optOfValue, seq) => {
-      println(s"\t[RT] RetrySnapshot=$msg")
+      //println(s"\t[RT] RetrySnapshot=$msg")
       val snapshotMsg = Snapshot(key, optOfValue, seq)
       if (!done.contains(snapshotMsg)) {
         replica ! snapshotMsg

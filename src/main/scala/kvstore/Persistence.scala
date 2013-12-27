@@ -1,6 +1,6 @@
 package kvstore
 
-import akka.actor.{Props, Actor}
+import akka.actor._
 import scala.util.Random
 
 object Persistence {
@@ -18,11 +18,26 @@ class Persistence(flaky: Boolean) extends Actor {
 
   import Persistence._
 
+  var requests = Map.empty[Persist, ActorRef]
+
+  override def preRestart(ex: Throwable, message: Option[Any]) {
+    for((msg, sender) <- requests) {
+      sender ! Persisted(msg.key, msg.id)
+    }
+  }
+
   def receive = {
-    case msg@Persist(key, _, id) =>
-      println(s"\t\t\t[PS] Persist=$msg")
-      if (!flaky || Random.nextBoolean()) sender ! Persisted(key, id)
-      else throw new PersistenceException
+    case msg@Persist(key, _, id) => {
+      requests = requests + (msg -> sender)
+      //println(s"\t\t\t[PS] Persist=$msg")
+      if (!flaky || Random.nextBoolean()) {
+        sender ! Persisted(key, id)
+        requests = requests - (msg)
+      }
+      else {
+        throw new PersistenceException
+      }
+    }
   }
 
 }

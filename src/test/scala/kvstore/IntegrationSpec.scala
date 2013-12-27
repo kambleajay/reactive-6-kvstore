@@ -42,10 +42,15 @@ class IntegrationSpec extends Specification with NoTimeConversions {
       primary ! Insert("c", "c", 3)
       expectMsgType[OperationAck] must be equalTo OperationAck(3)
 
-      //primary ! Replicas(Set(primary, secondaryB, secondaryC))
+      primary ! Replicas(Set(primary, secondaryB, secondaryC))
 
-      //primary ! Remove("a", 4)
-      //expectMsgType[OperationAck] must be equalTo OperationAck(4)
+      primary ! Remove("a", 4)
+      expectMsgType[OperationAck] must be equalTo OperationAck(4)
+
+      primary ! Replicas(Set(primary, secondaryC))
+
+      secondaryC ! Get("c", 5)
+      expectMsgType[GetResult] must be equalTo GetResult("c", Some("c"), 5)
     }
 
   }
